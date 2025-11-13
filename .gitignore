@@ -1,0 +1,38 @@
+# User configuration directory
+.dali/
+.kalitool/
+
+# WireGuard VPN configurations (NEVER commit!)
+vpn/
+*.conf
+
+# BUT keep example folder if you create one
+!vpn.example/
+!vpn.example/*.conf
+
+# Logs
+*.log
+
+# Backups
+*.bak
+*~
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python cache (if you add Python scripts)
+__pycache__/
+*.pyc
+*.pyo
+
+# Temporary files
+*.tmp
+.*.swp

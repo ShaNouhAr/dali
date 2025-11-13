@@ -1,0 +1,824 @@
+#!/bin/bash
+
+#############################################
+# Dali - Kali Container Manager
+# With Gluetun VPN integration
+#############################################
+
+set -e
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Variables
+CONFIG_DIR="$HOME/.dali"
+CONFIG_FILE="$CONFIG_DIR/config"
+NETWORK_NAME="dali_network"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VPN_DIR="$SCRIPT_DIR/vpn"
+KALI_IMAGE="dali-kali:latest"
+DATA_DIR="/opt/dali/data"
+
+#############################################
+# Utility functions
+#############################################
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}[OK]${NC} $1"
+}
+
+print_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+check_docker() {
+    if ! command -v docker &> /dev/null; then
+        print_error "Docker is not installed"
+        exit 1
+    fi
+    
+    if ! docker ps &> /dev/null; then
+        print_error "Docker is not running or you don't have permissions"
+        exit 1
+    fi
+}
+
+create_network() {
+    if ! docker network ls | grep -q "$NETWORK_NAME"; then
+        print_info "Creating Docker network..."
+        docker network create "$NETWORK_NAME" &> /dev/null
+    fi
+}
+
+check_vpn_dir() {
+    if [ ! -d "$VPN_DIR" ]; then
+        print_error "The vpn/ directory doesn't exist"
+        print_info "Create the directory and add your WireGuard .conf files"
+        exit 1
+    fi
+    
+    if [ -z "$(ls -A "$VPN_DIR"/*.conf 2>/dev/null)" ]; then
+        print_error "No .conf files found in vpn/"
+        print_info "Add your WireGuard configurations (.conf) to $VPN_DIR"
+        exit 1
+    fi
+}
+
+check_kali_image() {
+    if ! docker images | grep -q "^dali-kali"; then
+        print_warning "⚠ Local Kali image not found!"
+        print_error "You must first build the Kali image"
+        echo ""
+        print_info "Run: ${YELLOW}dali build${NC}"
+        echo ""
+        print_info "This operation takes ~30 minutes (only once)"
+        print_info "It installs 600+ pentest tools in the image"
+        exit 1
+    fi
+}
+
+check_gluetun_usage() {
+    local gluetun_name="$1"
+    # Count how many Kali containers are using this Gluetun
+    local count=$(docker ps -a --filter "network=container:$gluetun_name" --format '{{.Names}}' | grep -c "_kali$" || echo "0")
+    echo "$count"
+}
+
+prepare_data_dir() {
+    local name="$1"
+    local container_data_dir="$DATA_DIR/$name"
+    
+    # Create data directory for this container
+    if [ ! -d "$container_data_dir" ]; then
+        sudo mkdir -p "$container_data_dir"
+        sudo chmod 755 "$container_data_dir"
+        print_info "Data directory created: $container_data_dir"
+    fi
+    
+    echo "$container_data_dir"
+}
+
+#############################################
+# Command: init
+#############################################
+
+cmd_init() {
+    print_info "Initializing Dali"
+    echo ""
+    
+    # Create vpn folder if it doesn't exist
+    if [ ! -d "$VPN_DIR" ]; then
+        mkdir -p "$VPN_DIR"
+        print_success "vpn/ folder created: $VPN_DIR"
+        print_info "Add your WireGuard .conf files to this directory"
+    else
+        print_info "vpn/ folder already exists"
+    fi
+    
+    # Count .conf files
+    local conf_count=$(ls -1 "$VPN_DIR"/*.conf 2>/dev/null | wc -l)
+    if [ $conf_count -gt 0 ]; then
+        print_success "$conf_count WireGuard configuration(s) found"
+        ls "$VPN_DIR"/*.conf 2>/dev/null | while read conf; do
+            echo "  - $(basename "$conf")"
+        done
+    else
+        print_warning "No WireGuard configuration found"
+        print_info "Add your .conf files to $VPN_DIR"
+    fi
+    
+    # Create Docker network
+    create_network
+    print_success "Docker network created"
+    
+    # Create data directory
+    if [ ! -d "$DATA_DIR" ]; then
+        sudo mkdir -p "$DATA_DIR"
+        sudo chmod 755 "$DATA_DIR"
+        print_success "Data folder created: $DATA_DIR"
+    else
+        print_info "Data folder already exists: $DATA_DIR"
+    fi
+    
+    echo ""
+    print_success "Initialization completed!"
+    print_info "Use 'dali build' to build the Kali image"
+}
+
+#############################################
+# Command: build
+#############################################
+
+cmd_build() {
+    print_info "Building custom Kali image with kali-linux-large"
+    echo ""
+    print_warning "⚠ This operation can take 20-40 minutes"
+    print_info "It downloads and installs 600+ pentest tools"
+    print_info "Image: kalilinux/kali-rolling + kali-linux-large (~9 GB)"
+    echo ""
+    
+    # Check that Dockerfile exists
+    if [ ! -f "$SCRIPT_DIR/Dockerfile" ]; then
+        print_error "Dockerfile not found in $SCRIPT_DIR"
+        exit 1
+    fi
+    
+    # Build the image
+    print_info "Starting build..."
+    docker build -t "$KALI_IMAGE" "$SCRIPT_DIR"
+    
+    if [ $? -eq 0 ]; then
+        echo ""
+        print_success "✓ Kali image built successfully!"
+        print_success "Image: $KALI_IMAGE"
+        echo ""
+        print_info "You can now create containers with:"
+        print_info "  ${YELLOW}dali create <name>${NC}"
+    else
+        echo ""
+        print_error "Image build failed"
+        exit 1
+    fi
+}
+
+#############################################
+# Command: create
+#############################################
+
+generate_random_name() {
+    local adjectives=("swift" "stealth" "shadow" "cyber" "dark" "ghost" "silent" "rapid" "secure" "hidden")
+    local nouns=("fox" "wolf" "eagle" "hawk" "panther" "viper" "falcon" "tiger" "cobra" "raven")
+    local adj=${adjectives[$RANDOM % ${#adjectives[@]}]}
+    local noun=${nouns[$RANDOM % ${#nouns[@]}]}
+    local num=$((RANDOM % 1000))
+    echo "${adj}-${noun}-${num}"
+}
+
+cmd_create() {
+    local name="$1"
+    local vpn_option="$2"
+    local vpn_conf="$3"
+    
+    # If first argument is --vpn or --no-vpn, generate random name
+    if [ "$name" == "--vpn" ] || [ "$name" == "--no-vpn" ]; then
+        vpn_option="$name"
+        vpn_conf="$2"
+        name=$(generate_random_name)
+        print_info "Generated automatic name: $name"
+    elif [ -z "$name" ]; then
+        # Generate random name if no name provided
+        name=$(generate_random_name)
+        print_info "Generated automatic name: $name"
+    fi
+    
+    create_network
+    
+    # Check that local Kali image exists
+    check_kali_image
+    
+    # Check if container already exists
+    if docker ps -a --format '{{.Names}}' | grep -q "^${name}$\|^${name}_gluetun$"; then
+        print_error "Container '$name' already exists"
+        exit 1
+    fi
+    
+    # Determine if we want VPN
+    local use_vpn=false
+    
+    if [ "$vpn_option" == "--vpn" ]; then
+        use_vpn=true
+        vpn_conf="$3"
+    elif [ "$vpn_option" == "--no-vpn" ] || [ -z "$vpn_option" ]; then
+        use_vpn=false
+    else
+        # Ask interactively
+        echo ""
+        read -p "Do you want to use a VPN (Gluetun)? [y/N] " vpn_choice
+        if [[ "$vpn_choice" =~ ^[Yy]$ ]]; then
+            use_vpn=true
+            vpn_conf="$vpn_option"  # In case a file is passed directly
+        fi
+    fi
+    
+    # MODE WITHOUT VPN
+    if [ "$use_vpn" = false ]; then
+        print_info "Creating Kali container '$name' (WITHOUT VPN)..."
+        
+        # Prepare data directory
+        local host_data_dir=$(prepare_data_dir "$name")
+        
+        docker run -d \
+            --name "${name}" \
+            --network "$NETWORK_NAME" \
+            -v "$host_data_dir:/data" \
+            --cap-add=NET_ADMIN \
+            --cap-add=NET_RAW \
+            "$KALI_IMAGE" \
+            tail -f /dev/null &> /dev/null
+        
+        print_success "Kali container created"
+        print_success "Container '$name' created successfully!"
+        print_warning "⚠ This container does NOT use VPN"
+        print_info "Data: $host_data_dir → /data"
+        print_info "Use 'dali shell $name' to access it"
+        return
+    fi
+    
+    # MODE WITH VPN
+    check_vpn_dir
+    
+    # If no .conf file specified, ask
+    if [ -z "$vpn_conf" ]; then
+        echo ""
+        print_info "Available WireGuard configurations:"
+        echo ""
+        
+        local configs=()
+        local i=1
+        while IFS= read -r conf; do
+            configs+=("$conf")
+            echo "  $i) $(basename "$conf")"
+            ((i++))
+        done < <(ls "$VPN_DIR"/*.conf 2>/dev/null)
+        
+        echo ""
+        read -p "Choose a configuration [1-$((i-1))]: " choice
+        
+        if [[ ! "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -ge "$i" ]; then
+            print_error "Invalid choice"
+            exit 1
+        fi
+        
+        vpn_conf="${configs[$((choice-1))]}"
+    else
+        # Check if file exists
+        if [ ! -f "$VPN_DIR/$vpn_conf" ]; then
+            print_error "File $vpn_conf not found in vpn/"
+            exit 1
+        fi
+        vpn_conf="$VPN_DIR/$vpn_conf"
+    fi
+    
+    print_info "Using: $(basename "$vpn_conf")"
+    
+    # Generate Gluetun container name based on config file
+    local conf_name=$(basename "$vpn_conf" .conf)
+    local gluetun_name="gluetun_${conf_name}"
+    
+    # Check if Gluetun container already exists for this config
+    if docker ps -a --format '{{.Names}}' | grep -q "^${gluetun_name}$"; then
+        print_info "Reusing existing Gluetun container: $gluetun_name"
+        
+        # Check if it's running
+        if ! docker ps --format '{{.Names}}' | grep -q "^${gluetun_name}$"; then
+            print_info "Starting Gluetun container..."
+            docker start "$gluetun_name" &> /dev/null
+            sleep 3
+        fi
+    else
+        print_info "Creating Gluetun container: $gluetun_name"
+        
+        # Create Gluetun container with WireGuard
+        docker run -d \
+            --name "$gluetun_name" \
+            --cap-add NET_ADMIN \
+            --network "$NETWORK_NAME" \
+            -e VPN_SERVICE_PROVIDER=custom \
+            -e VPN_TYPE=wireguard \
+            -v "$vpn_conf:/gluetun/wireguard/wg0.conf:ro" \
+            -e HTTPPROXY=off \
+            -e SHADOWSOCKS=off \
+            qmcgaw/gluetun &> /dev/null
+        
+        print_success "Gluetun container created"
+        
+        # Wait for Gluetun to be ready
+        print_info "Waiting for VPN connection..."
+        sleep 8
+    fi
+    
+    # Create Kali container connected to Gluetun
+    print_info "Creating Kali container..."
+    
+    # Prepare data directory
+    local host_data_dir=$(prepare_data_dir "$name")
+    
+    docker run -d \
+        --name "${name}_kali" \
+        --network "container:$gluetun_name" \
+        -v "$host_data_dir:/data" \
+        --cap-add=NET_ADMIN \
+        --cap-add=NET_RAW \
+        "$KALI_IMAGE" \
+        tail -f /dev/null &> /dev/null
+    
+    print_success "Kali container created"
+    print_success "Container '$name' created successfully!"
+    print_info "VPN config: $(basename "$vpn_conf")"
+    print_info "Shared Gluetun container: $gluetun_name"
+    print_info "Data: $host_data_dir → /data"
+    print_info "Use 'dali shell $name' to access it"
+}
+
+#############################################
+# Command: start
+#############################################
+
+cmd_start() {
+    local name="$1"
+    
+    if [ -z "$name" ]; then
+        print_error "Usage: dali start <name>"
+        exit 1
+    fi
+    
+    # Check if it's a container with VPN
+    if docker ps -a --format '{{.Names}}' | grep -q "^${name}_kali$"; then
+        print_info "Starting '$name' (with VPN)..."
+        
+        # Find associated Gluetun
+        local gluetun_name=$(docker inspect "${name}_kali" 2>/dev/null | grep -oP 'container:\K[^"]+' || echo "")
+        
+        if [ -n "$gluetun_name" ]; then
+            # Start Gluetun if not already running
+            if ! docker ps --format '{{.Names}}' | grep -q "^${gluetun_name}$"; then
+                print_info "Starting Gluetun container: $gluetun_name"
+                docker start "$gluetun_name" &> /dev/null
+                sleep 2
+            fi
+        fi
+        
+        docker start "${name}_kali" &> /dev/null
+        print_success "Container '$name' started"
+    # Or a container without VPN
+    elif docker ps -a --format '{{.Names}}' | grep -q "^${name}$"; then
+        print_info "Starting '$name' (without VPN)..."
+        docker start "${name}" &> /dev/null
+        print_success "Container '$name' started"
+    else
+        print_error "Container '$name' doesn't exist"
+        exit 1
+    fi
+}
+
+#############################################
+# Command: stop
+#############################################
+
+cmd_stop() {
+    local name="$1"
+    
+    if [ -z "$name" ]; then
+        print_error "Usage: dali stop <name>"
+        exit 1
+    fi
+    
+    print_info "Stopping '$name'..."
+    
+    # Stop container with VPN (but NOT Gluetun, it can be shared)
+    docker stop "${name}_kali" &> /dev/null 2>&1 || true
+    
+    # Or without VPN
+    docker stop "${name}" &> /dev/null 2>&1 || true
+    
+    print_success "Container '$name' stopped"
+    print_info "Note: Gluetun container remains active (shared with other containers)"
+}
+
+#############################################
+# Command: delete
+#############################################
+
+cmd_delete() {
+    local name="$1"
+    
+    if [ -z "$name" ]; then
+        print_error "Usage: dali delete <name>"
+        exit 1
+    fi
+    
+    read -p "Are you sure you want to delete '$name'? [y/N] " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        print_info "Cancelled"
+        exit 0
+    fi
+    
+    print_info "Deleting '$name'..."
+    
+    # Check if it's a container with VPN
+    if docker ps -a --format '{{.Names}}' | grep -q "^${name}_kali$"; then
+        # Find associated Gluetun
+        local gluetun_name=$(docker inspect "${name}_kali" 2>/dev/null | grep -oP 'container:\K[^"]+' || echo "")
+        
+        # Remove Kali container
+        docker stop "${name}_kali" &> /dev/null 2>&1 || true
+        docker rm "${name}_kali" &> /dev/null 2>&1 || true
+        
+        # Check if other containers are using this Gluetun
+        if [ -n "$gluetun_name" ]; then
+            local usage=$(check_gluetun_usage "$gluetun_name")
+            if [ "$usage" -eq 0 ]; then
+                print_info "No other container is using $gluetun_name, removing..."
+                docker stop "$gluetun_name" &> /dev/null 2>&1 || true
+                docker rm "$gluetun_name" &> /dev/null 2>&1 || true
+            else
+                print_info "$gluetun_name is still used by $usage container(s), keeping it"
+            fi
+        fi
+    else
+        # Remove container without VPN
+        docker stop "${name}" &> /dev/null 2>&1 || true
+        docker rm "${name}" &> /dev/null 2>&1 || true
+    fi
+    
+    read -p "Also delete data (/opt/dali/data/$name)? [y/N] " confirm_data
+    if [[ "$confirm_data" =~ ^[Yy]$ ]]; then
+        if [ -d "$DATA_DIR/$name" ]; then
+            sudo rm -rf "$DATA_DIR/$name"
+            print_success "Data deleted"
+        fi
+    fi
+    
+    print_success "Container '$name' deleted"
+}
+
+#############################################
+# Command: rm (quick deletion)
+#############################################
+
+cmd_rm() {
+    local name="$1"
+    
+    if [ -z "$name" ]; then
+        print_error "Usage: dali rm <name>"
+        exit 1
+    fi
+    
+    # Check that container exists
+    local exists=false
+    if docker ps -a --format '{{.Names}}' | grep -q "^${name}$\|^${name}_kali$"; then
+        exists=true
+    fi
+    
+    if [ "$exists" = false ]; then
+        print_error "Container '$name' doesn't exist"
+        exit 1
+    fi
+    
+    print_info "Complete deletion of '$name'..."
+    
+    # Check if it's a container with VPN
+    if docker ps -a --format '{{.Names}}' | grep -q "^${name}_kali$"; then
+        # Find associated Gluetun
+        local gluetun_name=$(docker inspect "${name}_kali" 2>/dev/null | grep -oP 'container:\K[^"]+' || echo "")
+        
+        # Remove Kali container
+        docker stop "${name}_kali" &> /dev/null 2>&1 || true
+        docker rm "${name}_kali" &> /dev/null 2>&1 || true
+        
+        # Check if other containers are using this Gluetun
+        if [ -n "$gluetun_name" ]; then
+            local usage=$(check_gluetun_usage "$gluetun_name")
+            if [ "$usage" -eq 0 ]; then
+                print_info "No other container is using $gluetun_name, removing..."
+                docker stop "$gluetun_name" &> /dev/null 2>&1 || true
+                docker rm "$gluetun_name" &> /dev/null 2>&1 || true
+            else
+                print_info "$gluetun_name is still used by $usage container(s), keeping it"
+            fi
+        fi
+    else
+        # Remove container without VPN
+        docker stop "${name}" &> /dev/null 2>&1 || true
+        docker rm "${name}" &> /dev/null 2>&1 || true
+    fi
+    
+    # Remove data (always)
+    if [ -d "$DATA_DIR/$name" ]; then
+        sudo rm -rf "$DATA_DIR/$name"
+        print_info "Data deleted: $DATA_DIR/$name"
+    fi
+    
+    print_success "Container '$name' and data deleted"
+}
+
+#############################################
+# Command: list
+#############################################
+
+cmd_list() {
+    print_info "Dali containers:"
+    echo ""
+    
+    local found=0
+    
+    # List containers WITH VPN (those with _kali)
+    for container in $(docker ps -a --format '{{.Names}}' | grep '_kali$' | sed 's/_kali$//'); do
+        found=1
+        local status=$(docker ps --format '{{.Names}} {{.Status}}' | grep "^${container}_kali" | awk '{print $2}')
+        
+        if [ -z "$status" ]; then
+            status=$(docker ps -a --format '{{.Names}} {{.Status}}' | grep "^${container}_kali" | awk '{print $2}')
+        fi
+        
+        # Find associated Gluetun
+        local gluetun_name=$(docker inspect "${container}_kali" 2>/dev/null | grep -oP 'container:\K[^"]+' || echo "")
+        local vpn_info=""
+        if [ -n "$gluetun_name" ]; then
+            vpn_info=" → $gluetun_name"
+        fi
+        
+        if [[ "$status" == "Up" ]]; then
+            echo -e "  ${GREEN}●${NC} $container (running) ${BLUE}[VPN]${NC}${vpn_info}"
+        else
+            echo -e "  ${RED}●${NC} $container (stopped) ${BLUE}[VPN]${NC}${vpn_info}"
+        fi
+    done
+    
+    # List containers WITHOUT VPN (those without _kali)
+    for container in $(docker ps -a --filter "network=$NETWORK_NAME" --format '{{.Names}}' | grep -v '_kali$' | grep -v '^gluetun_'); do
+        # Check that it's really a Kali container
+        if docker inspect "$container" 2>/dev/null | grep -q "kalilinux/kali\|dali-kali"; then
+            found=1
+            
+            # Check if container is running
+            if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
+                echo -e "  ${GREEN}●${NC} $container (running) ${YELLOW}[NO VPN]${NC}"
+            else
+                echo -e "  ${RED}●${NC} $container (stopped) ${YELLOW}[NO VPN]${NC}"
+            fi
+        fi
+    done
+    
+    # Display Gluetun containers and their usage
+    echo ""
+    print_info "Gluetun containers (VPN):"
+    local gluetun_found=0
+    for gluetun in $(docker ps -a --format '{{.Names}}' | grep '^gluetun_'); do
+        gluetun_found=1
+        local usage=$(check_gluetun_usage "$gluetun")
+        local status=$(docker ps --format '{{.Names}}' | grep -q "^${gluetun}$" && echo "Up" || echo "Down")
+        
+        if [[ "$status" == "Up" ]]; then
+            echo -e "  ${GREEN}●${NC} $gluetun (running) - used by ${BLUE}$usage${NC} container(s)"
+        else
+            echo -e "  ${RED}●${NC} $gluetun (stopped) - used by ${BLUE}$usage${NC} container(s)"
+        fi
+    done
+    
+    if [ $gluetun_found -eq 0 ]; then
+        echo -e "  ${YELLOW}No Gluetun containers${NC}"
+    fi
+    
+    if [ $found -eq 0 ]; then
+        echo ""
+        print_warning "No containers found"
+        print_info "Use 'dali create <name>' to create one"
+    fi
+}
+
+#############################################
+# Command: shell
+#############################################
+
+cmd_shell() {
+    local name="$1"
+    
+    if [ -z "$name" ]; then
+        print_error "Usage: dali shell <name>"
+        exit 1
+    fi
+    
+    # Check if it's a container with VPN
+    if docker ps --format '{{.Names}}' | grep -q "^${name}_kali$"; then
+        print_info "Connecting to container '$name' (with VPN)..."
+        docker exec -it "${name}_kali" /bin/bash
+    # Or a container without VPN
+    elif docker ps --format '{{.Names}}' | grep -q "^${name}$"; then
+        print_info "Connecting to container '$name' (without VPN)..."
+        docker exec -it "${name}" /bin/bash
+    else
+        print_error "Container '$name' is not running"
+        print_info "Use 'dali start $name' to start it"
+        exit 1
+    fi
+}
+
+#############################################
+# Command: checkip
+#############################################
+
+cmd_checkip() {
+    local name="$1"
+    
+    if [ -z "$name" ]; then
+        print_error "Usage: dali checkip <name>"
+        exit 1
+    fi
+    
+    local container_name=""
+    local has_vpn=false
+    
+    # Determine container name and if VPN is active
+    if docker ps --format '{{.Names}}' | grep -q "^${name}_kali$"; then
+        container_name="${name}_kali"
+        has_vpn=true
+    elif docker ps --format '{{.Names}}' | grep -q "^${name}$"; then
+        container_name="${name}"
+        has_vpn=false
+    else
+        print_error "Container '$name' is not running"
+        exit 1
+    fi
+    
+    print_info "Checking IP for '$name'..."
+    local ip=$(docker exec "${container_name}" curl -s https://api.ipify.org 2>/dev/null)
+    
+    if [ -n "$ip" ]; then
+        if [ "$has_vpn" = true ]; then
+            print_success "Public IP: $ip ${BLUE}[VPN]${NC}"
+        else
+            print_success "Public IP: $ip ${YELLOW}[NO VPN]${NC}"
+        fi
+        local country=$(docker exec "${container_name}" curl -s "https://ipapi.co/$ip/country_name/" 2>/dev/null)
+        if [ -n "$country" ]; then
+            print_info "Country: $country"
+        fi
+    else
+        print_error "Unable to retrieve IP"
+    fi
+}
+
+#############################################
+# Help display
+#############################################
+
+show_help() {
+    cat << EOF
+
+================================================================
+  Dali - Kali Container Manager (with or without VPN)
+================================================================
+
+SETUP
+  init       Initialize Dali (create vpn/ folder)
+  build      Build local Kali image with 600+ tools (~30 min, once)
+
+CONTAINER MANAGEMENT
+  create                         Random name, no VPN
+  create <name>                  Named container, no VPN
+  create --vpn                   Random name, with VPN
+  create <name> --vpn            Named container, with VPN (interactive)
+  create <name> --vpn file.conf  Named container, specific VPN config
+
+  start <name>                   Start a container
+  stop <name>                    Stop a container
+  
+  ls / list                      List all containers
+  shell <name>                   Access container shell
+  checkip <name>                 Check container IP
+
+DELETION
+  rm <name>                      Quick delete (no confirmation)
+  delete <name>                  Safe delete (with confirmation)
+
+HELP
+  help                           Show this help
+
+================================================================
+
+QUICK START
+
+  1. dali init                   # Create directories
+  2. dali build                  # Build image (once, ~30 min)
+  3. dali create pentest1        # Create container
+  4. dali shell pentest1         # Start hacking!
+
+================================================================
+
+EXAMPLES
+
+  dali create                    Create with random name (e.g., stealth-fox-123)
+  dali create test1              Create 'test1' without VPN
+  dali create hack --vpn         Create 'hack' with VPN (choose config)
+  dali ls                        List all containers
+  dali checkip hack              Verify VPN is working
+  dali rm test1                  Delete 'test1' (fast, no confirmation)
+
+================================================================
+
+NOTES
+
+  [VPN]      = Container with VPN active
+  [NO VPN]   = Container without VPN (direct connection)
+  
+  Data location: /opt/dali/data/<name> -> /data (in container)
+  Local image:   dali-kali:latest (~9 GB)
+
+================================================================
+
+EOF
+}
+
+#############################################
+# Main
+#############################################
+
+check_docker
+
+case "${1:-}" in
+    init)
+        cmd_init
+        ;;
+    build)
+        cmd_build
+        ;;
+    create)
+        cmd_create "$2" "$3" "$4"
+        ;;
+    start)
+        cmd_start "$2"
+        ;;
+    stop)
+        cmd_stop "$2"
+        ;;
+    delete)
+        cmd_delete "$2"
+        ;;
+    rm)
+        cmd_rm "$2"
+        ;;
+    list|ls)
+        cmd_list
+        ;;
+    shell)
+        cmd_shell "$2"
+        ;;
+    checkip)
+        cmd_checkip "$2"
+        ;;
+    help|--help|-h)
+        show_help
+        ;;
+    "")
+        show_help
+        ;;
+    *)
+        print_error "Unknown command: $1"
+        echo ""
+        show_help
+        exit 1
+        ;;
+esac
