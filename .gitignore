@@ -2,14 +2,6 @@
 .dali/
 .kalitool/
 
-# WireGuard VPN configurations (NEVER commit!)
-vpn/
-*.conf
-
-# BUT keep example folder if you create one
-!vpn.example/
-!vpn.example/*.conf
-
 # Logs
 *.log
 

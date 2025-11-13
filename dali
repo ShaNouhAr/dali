@@ -19,7 +19,6 @@ CONFIG_DIR="$HOME/.dali"
 CONFIG_FILE="$CONFIG_DIR/config"
 NETWORK_NAME="dali_network"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VPN_DIR="$SCRIPT_DIR/vpn"
 KALI_IMAGE="dali-kali:latest"
 DATA_DIR="/opt/dali/data"
 
@@ -62,16 +61,17 @@ create_network() {
     fi
 }
 
-check_vpn_dir() {
-    if [ ! -d "$VPN_DIR" ]; then
-        print_error "The vpn/ directory doesn't exist"
-        print_info "Create the directory and add your WireGuard .conf files"
+check_vpn_file() {
+    local vpn_file="$1"
+    
+    if [ ! -f "$vpn_file" ]; then
+        print_error "VPN configuration file not found: $vpn_file"
+        print_info "Provide a valid path to a .conf file"
         exit 1
     fi
     
-    if [ -z "$(ls -A "$VPN_DIR"/*.conf 2>/dev/null)" ]; then
-        print_error "No .conf files found in vpn/"
-        print_info "Add your WireGuard configurations (.conf) to $VPN_DIR"
+    if [[ ! "$vpn_file" =~ \.conf$ ]]; then
+        print_error "File must be a .conf file"
         exit 1
     fi
 }
@@ -117,27 +117,6 @@ prepare_data_dir() {
 cmd_init() {
     print_info "Initializing Dali"
     echo ""
-    
-    # Create vpn folder if it doesn't exist
-    if [ ! -d "$VPN_DIR" ]; then
-        mkdir -p "$VPN_DIR"
-        print_success "vpn/ folder created: $VPN_DIR"
-        print_info "Add your WireGuard .conf files to this directory"
-    else
-        print_info "vpn/ folder already exists"
-    fi
-    
-    # Count .conf files
-    local conf_count=$(ls -1 "$VPN_DIR"/*.conf 2>/dev/null | wc -l)
-    if [ $conf_count -gt 0 ]; then
-        print_success "$conf_count WireGuard configuration(s) found"
-        ls "$VPN_DIR"/*.conf 2>/dev/null | while read conf; do
-            echo "  - $(basename "$conf")"
-        done
-    else
-        print_warning "No WireGuard configuration found"
-        print_info "Add your .conf files to $VPN_DIR"
-    fi
     
     # Create Docker network
     create_network
@@ -277,39 +256,20 @@ cmd_create() {
     fi
     
     # MODE WITH VPN
-    check_vpn_dir
     
-    # If no .conf file specified, ask
+    # If no .conf file specified, ask for path
     if [ -z "$vpn_conf" ]; then
         echo ""
-        print_info "Available WireGuard configurations:"
-        echo ""
+        read -p "Enter path to WireGuard .conf file: " vpn_conf
         
-        local configs=()
-        local i=1
-        while IFS= read -r conf; do
-            configs+=("$conf")
-            echo "  $i) $(basename "$conf")"
-            ((i++))
-        done < <(ls "$VPN_DIR"/*.conf 2>/dev/null)
-        
-        echo ""
-        read -p "Choose a configuration [1-$((i-1))]: " choice
-        
-        if [[ ! "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -ge "$i" ]; then
-            print_error "Invalid choice"
+        if [ -z "$vpn_conf" ]; then
+            print_error "No configuration file specified"
             exit 1
         fi
-        
-        vpn_conf="${configs[$((choice-1))]}"
-    else
-        # Check if file exists
-        if [ ! -f "$VPN_DIR/$vpn_conf" ]; then
-            print_error "File $vpn_conf not found in vpn/"
-            exit 1
-        fi
-        vpn_conf="$VPN_DIR/$vpn_conf"
     fi
+    
+    # Check if file exists and is valid
+    check_vpn_file "$vpn_conf"
     
     print_info "Using: $(basename "$vpn_conf")"
     
@@ -720,15 +680,15 @@ show_help() {
 ================================================================
 
 SETUP
-  init       Initialize Dali (create vpn/ folder)
+  init       Initialize Dali (create directories)
   build      Build local Kali image with 600+ tools (~30 min, once)
 
 CONTAINER MANAGEMENT
-  create                         Random name, no VPN
-  create <name>                  Named container, no VPN
-  create --vpn                   Random name, with VPN
-  create <name> --vpn            Named container, with VPN (interactive)
-  create <name> --vpn file.conf  Named container, specific VPN config
+  create                               Random name, no VPN
+  create <name>                        Named container, no VPN
+  create --vpn                         Random name, with VPN (asks for path)
+  create <name> --vpn                  Named container, with VPN (asks for path)
+  create <name> --vpn /path/file.conf  Named container, specific VPN config
 
   start <name>                   Start a container
   stop <name>                    Stop a container
@@ -757,12 +717,13 @@ QUICK START
 
 EXAMPLES
 
-  dali create                    Create with random name (e.g., stealth-fox-123)
-  dali create test1              Create 'test1' without VPN
-  dali create hack --vpn         Create 'hack' with VPN (choose config)
-  dali ls                        List all containers
-  dali checkip hack              Verify VPN is working
-  dali rm test1                  Delete 'test1' (fast, no confirmation)
+  dali create                              Create with random name (e.g., stealth-fox-123)
+  dali create test1                        Create 'test1' without VPN
+  dali create hack --vpn ~/vpn/us.conf     Create 'hack' with specific VPN
+  dali create --vpn                        Create with VPN (will ask for path)
+  dali ls                                  List all containers
+  dali checkip hack                        Verify VPN is working
+  dali rm test1                            Delete 'test1' (fast, no confirmation)
 
 ================================================================
 
