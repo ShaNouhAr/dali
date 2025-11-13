@@ -77,11 +77,11 @@ check_vpn_dir() {
 }
 
 check_kali_image() {
-    if ! docker images | grep -q "^dali-kali"; then
-        print_warning "⚠ Local Kali image not found!"
+    if ! docker images | grep -q "^dali-kali\|^kalitool-kali"; then
+        print_warning "Local Kali image not found!"
         print_error "You must first build the Kali image"
         echo ""
-        print_info "Run: ${YELLOW}dali build${NC}"
+        print_info "Run: dali build"
         echo ""
         print_info "This operation takes ~30 minutes (only once)"
         print_info "It installs 600+ pentest tools in the image"
@@ -587,17 +587,24 @@ cmd_list() {
         fi
     done
     
-    # List containers WITHOUT VPN (those without _kali)
-    for container in $(docker ps -a --filter "network=$NETWORK_NAME" --format '{{.Names}}' | grep -v '_kali$' | grep -v '^gluetun_'); do
-        # Check that it's really a Kali container
-        if docker inspect "$container" 2>/dev/null | grep -q "kalilinux/kali\|dali-kali"; then
-            found=1
-            
-            # Check if container is running
-            if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
-                echo -e "  ${GREEN}●${NC} $container (running) ${YELLOW}[NO VPN]${NC}"
-            else
-                echo -e "  ${RED}●${NC} $container (stopped) ${YELLOW}[NO VPN]${NC}"
+    # List containers WITHOUT VPN (those without _kali) - check both old and new networks
+    for container in $(docker ps -a --format '{{.Names}}' | grep -v '_kali$' | grep -v '^gluetun_'); do
+        # Check network (old kalitool_network or new dali_network)
+        local container_network=$(docker inspect "$container" 2>/dev/null --format '{{range .NetworkSettings.Networks}}{{.NetworkID}}{{end}}')
+        local dali_network_id=$(docker network inspect dali_network 2>/dev/null --format '{{.Id}}' || echo "")
+        local kalitool_network_id=$(docker network inspect kalitool_network 2>/dev/null --format '{{.Id}}' || echo "")
+        
+        if [ -n "$container_network" ] && ([ "$container_network" = "$dali_network_id" ] || [ "$container_network" = "$kalitool_network_id" ]); then
+            # Check that it's really a Kali container
+            if docker inspect "$container" 2>/dev/null | grep -q "kalilinux/kali\|dali-kali\|kalitool-kali"; then
+                found=1
+                
+                # Check if container is running
+                if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
+                    echo -e "  ${GREEN}●${NC} $container (running) ${YELLOW}[NO VPN]${NC}"
+                else
+                    echo -e "  ${RED}●${NC} $container (stopped) ${YELLOW}[NO VPN]${NC}"
+                fi
             fi
         fi
     done
