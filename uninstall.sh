@@ -28,24 +28,29 @@ print_warning() {
 
 echo ""
 echo "================================================================"
-echo "  Dali - Uninstallation"
+echo "  Dali - System Uninstallation"
 echo "================================================================"
 echo ""
 
 # Check if running as root
-if [ "$EUID" -eq 0 ]; then 
-    print_error "Do not run this script as root"
-    print_info "Run as normal user: ./uninstall.sh"
+if [ "$EUID" -ne 0 ]; then 
+    print_error "This script must be run as root"
+    print_info "Run with: sudo ./uninstall.sh"
     exit 1
 fi
+
+INSTALL_DIR="/opt/dali"
 
 # Check if dali is installed
-if [ ! -f "/usr/local/bin/dali" ] && [ ! -L "/usr/local/bin/dali" ]; then
-    print_error "dali is not installed"
+if [ ! -d "$INSTALL_DIR" ] && [ ! -L "/usr/local/bin/dali" ]; then
+    print_error "Dali is not installed"
     exit 1
 fi
 
-print_warning "This will remove dali from your system"
+print_warning "This will remove Dali from your system"
+print_info "Installation directory: $INSTALL_DIR"
+print_info "Symlink: /usr/local/bin/dali"
+echo ""
 read -p "Continue? [y/N] " confirm
 
 if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
@@ -54,15 +59,26 @@ if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
 fi
 
 # Remove symlink
-sudo rm /usr/local/bin/dali
-print_success "dali removed from /usr/local/bin/"
+if [ -L "/usr/local/bin/dali" ] || [ -f "/usr/local/bin/dali" ]; then
+    print_info "Removing symlink..."
+    rm /usr/local/bin/dali
+    print_success "Symlink removed"
+fi
+
+# Remove installation directory
+if [ -d "$INSTALL_DIR" ]; then
+    print_info "Removing installation directory..."
+    rm -rf "$INSTALL_DIR"
+    print_success "Installation directory removed"
+fi
 
 echo ""
-print_info "Optional cleanup:"
-echo "  - Docker images: docker rmi dali-kali:latest"
-echo "  - Containers: dali ls (use before uninstalling)"
-echo "  - Data: sudo rm -rf /opt/dali/data/"
-echo "  - Config: rm -rf ~/.dali/"
+print_success "Dali uninstalled successfully!"
 echo ""
-print_success "Uninstallation complete!"
+print_info "Optional cleanup (if needed):"
+echo "  - Docker images:   docker rmi dali-kali:latest"
+echo "  - Docker network:  docker network rm dali_network"
+echo "  - Data directory:  rm -rf /opt/dali/data/"
+echo "  - User configs:    rm -rf ~/.dali/ (for each user)"
+echo ""
 

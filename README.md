@@ -34,9 +34,43 @@ Dali builds a local Docker image **dali-kali:latest** (~9 GB) which includes:
 ### Prerequisites
 
 - Docker installed and running
+- Root access (for system-wide installation)
 - WireGuard `.conf` configuration files (optional, only for VPN mode)
 
-### Installation
+### System-wide Installation (recommended)
+
+Install Dali for all users on the system:
+
+```bash
+git clone <your-repo>
+cd dali
+chmod +x install.sh
+sudo ./install.sh
+```
+
+This will:
+- ✅ Copy Dali to `/opt/dali/`
+- ✅ Create symlink in `/usr/local/bin/dali`
+- ✅ Make it accessible to all users
+
+After installation, any user can run:
+
+```bash
+dali init
+dali build
+dali create test
+```
+
+**Important**: Users need to be in the `docker` group:
+
+```bash
+sudo usermod -aG docker <username>
+# Log out and log back in for changes to take effect
+```
+
+### Local Installation (alternative)
+
+For a single-user installation without sudo:
 
 ```bash
 git clone <your-repo>
@@ -45,22 +79,56 @@ chmod +x dali
 ./dali init
 ```
 
+Then use `./dali` instead of `dali`.
+
+### Uninstallation
+
+To uninstall Dali from the system:
+
+```bash
+cd dali
+sudo ./uninstall.sh
+```
+
+This will:
+- ❌ Remove `/opt/dali/` directory
+- ❌ Remove `/usr/local/bin/dali` symlink
+- ℹ️  Keep containers, images, and data (manual cleanup available)
+
+Optional cleanup after uninstall:
+
+```bash
+# Remove Docker images
+docker rmi dali-kali:latest
+
+# Remove Docker network
+docker network rm dali_network
+
+# Remove data directory
+sudo rm -rf /opt/dali/data/
+
+# Remove user configs (for each user)
+rm -rf ~/.dali/
+```
+
 ## 📖 Usage
 
 ### 1. Initialize Dali
 
 ```bash
-./dali init
+dali init
 ```
 
-Creates the `vpn/` folder for your WireGuard configuration files.
+Creates the Docker network and `/opt/dali/data/` directory.
+
+> Note: If using local installation, use `./dali` instead of `dali`
 
 ### 2. Build the local Kali image
 
 ⚠️ **IMPORTANT**: Run this **once** before creating containers.
 
 ```bash
-./dali build
+dali build
 ```
 
 This will:
@@ -70,37 +138,38 @@ This will:
 - Create the local image **dali-kali:latest**
 - Takes ~20-40 minutes (only once)
 
-### 3. Add your WireGuard configurations (optional)
+### 3. Prepare your WireGuard configurations (optional)
 
-Place your `.conf` files in the `vpn/` directory:
+Have your `.conf` files ready for VPN mode. You can place them anywhere, e.g.:
 
 ```bash
-cp my-vpn-config.conf vpn/
+mkdir -p ~/vpn-configs
+cp my-vpn-config.conf ~/vpn-configs/
 ```
 
 ### 4. Create a container
 
 ```bash
 # Without VPN (local testing)
-./dali create local-test
+dali create local-test
 
 # With VPN (interactive choice)
-./dali create pentest1 --vpn
+dali create pentest1 --vpn
 
 # With specific VPN
-./dali create pentest2 --vpn us-west.conf
+dali create pentest2 --vpn ~/vpn-configs/us-west.conf
 
 # With automatic name (without VPN)
-./dali create
+dali create
 
 # With automatic name (with VPN)
-./dali create --vpn
+dali create --vpn
 ```
 
 ### 5. Access the container shell
 
 ```bash
-./dali shell pentest1
+dali shell pentest1
 ```
 
 You're now in the Kali container! All tools are pre-installed:
@@ -120,37 +189,37 @@ exit
 ### 6. Start a container
 
 ```bash
-./dali start pentest1
+dali start pentest1
 ```
 
 ### 7. Check the IP
 
 ```bash
-./dali checkip pentest1
+dali checkip pentest1
 ```
 
 ### 8. List all containers
 
 ```bash
-./dali ls
+dali ls
 # or
-./dali list
+dali list
 ```
 
 ### 9. Stop a container
 
 ```bash
-./dali stop pentest1
+dali stop pentest1
 ```
 
 ### 10. Delete a container
 
 ```bash
 # Method 1: Quick deletion (ALL deleted)
-./dali rm pentest1              # Deletes container + data (no confirmation)
+dali rm pentest1              # Deletes container + data (no confirmation)
 
 # Method 2: With confirmation and choice
-./dali delete pentest1          # Asks for confirmation + data choice
+dali delete pentest1          # Asks for confirmation + data choice
 ```
 
 ## 📦 Features
@@ -194,14 +263,14 @@ exit
 
 ```bash
 # Create container with VPN
-./dali create pentest1 --vpn us-west.conf
+dali create pentest1 --vpn ~/vpn-configs/us-west.conf
 
 # Check VPN is active
-./dali checkip pentest1
+dali checkip pentest1
 # Result: Public IP: X.X.X.X [VPN]
 
 # Access container
-./dali shell pentest1
+dali shell pentest1
 
 # Inside container - all tools ready
 nmap -sV target.com
@@ -213,17 +282,17 @@ exit
 
 ```bash
 # Create container WITHOUT VPN
-./dali create local-test
+dali create local-test
 
 # Check IP (your real IP)
-./dali checkip local-test
+dali checkip local-test
 # Result: Public IP: X.X.X.X [NO VPN]
 
 # Use normally
-./dali shell local-test
+dali shell local-test
 
 # Delete ALL quickly when done
-./dali rm local-test
+dali rm local-test
 # → Container + data deleted
 ```
 
@@ -231,16 +300,16 @@ exit
 
 ```bash
 # Create US container with VPN
-./dali create us-mission --vpn us-west.conf
+dali create us-mission --vpn ~/vpn-configs/us-west.conf
 
 # Create EU container with VPN
-./dali create eu-mission --vpn eu-france.conf
+dali create eu-mission --vpn ~/vpn-configs/eu-france.conf
 
 # Create local container
-./dali create local-tests
+dali create local-tests
 
 # List all
-./dali ls
+dali ls
 # Result:
 #   ● us-mission (running) [VPN]
 #   ● eu-mission (running) [VPN]
@@ -259,7 +328,7 @@ Files placed in `/data` (in the container) are automatically saved on the host a
 
 ```bash
 # In container - save nmap scan
-./dali shell pentest1
+dali shell pentest1
 cd /data
 nmap -sV -oN scan_results.txt target.com
 exit

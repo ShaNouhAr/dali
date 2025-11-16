@@ -28,24 +28,29 @@ print_warning() {
 
 echo ""
 echo "================================================================"
-echo "  Dali - Installation"
+echo "  Dali - System-wide Installation"
 echo "================================================================"
 echo ""
 
 # Check if running as root
-if [ "$EUID" -eq 0 ]; then 
-    print_error "Do not run this script as root"
-    print_info "Run as normal user: ./install.sh"
+if [ "$EUID" -ne 0 ]; then 
+    print_error "This script must be run as root"
+    print_info "Run with: sudo ./install.sh"
     exit 1
 fi
 
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DALI_SCRIPT="$SCRIPT_DIR/dali"
+INSTALL_DIR="/opt/dali"
 
-# Check if dali script exists
-if [ ! -f "$DALI_SCRIPT" ]; then
+# Check if required files exist
+if [ ! -f "$SCRIPT_DIR/dali" ]; then
     print_error "dali script not found in $SCRIPT_DIR"
+    exit 1
+fi
+
+if [ ! -f "$SCRIPT_DIR/Dockerfile" ]; then
+    print_error "Dockerfile not found in $SCRIPT_DIR"
     exit 1
 fi
 
@@ -56,33 +61,67 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-# Create symbolic link to /usr/local/bin
-print_info "Installing dali to /usr/local/bin/..."
-
-if [ -f "/usr/local/bin/dali" ] || [ -L "/usr/local/bin/dali" ]; then
-    print_warning "dali is already installed"
+# Check if already installed
+if [ -d "$INSTALL_DIR" ]; then
+    print_warning "Dali is already installed in $INSTALL_DIR"
     read -p "Overwrite existing installation? [y/N] " confirm
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         print_info "Installation cancelled"
         exit 0
     fi
-    sudo rm /usr/local/bin/dali
+    print_info "Removing old installation..."
+    rm -rf "$INSTALL_DIR"
 fi
 
+# Create installation directory
+print_info "Creating installation directory..."
+mkdir -p "$INSTALL_DIR"
+
+# Copy files
+print_info "Copying files to $INSTALL_DIR..."
+cp "$SCRIPT_DIR/dali" "$INSTALL_DIR/"
+cp "$SCRIPT_DIR/Dockerfile" "$INSTALL_DIR/"
+
+# Copy documentation if exists
+[ -f "$SCRIPT_DIR/README.md" ] && cp "$SCRIPT_DIR/README.md" "$INSTALL_DIR/"
+[ -f "$SCRIPT_DIR/QUICKSTART.md" ] && cp "$SCRIPT_DIR/QUICKSTART.md" "$INSTALL_DIR/"
+[ -f "$SCRIPT_DIR/EXAMPLES.md" ] && cp "$SCRIPT_DIR/EXAMPLES.md" "$INSTALL_DIR/"
+[ -f "$SCRIPT_DIR/CHANGELOG.md" ] && cp "$SCRIPT_DIR/CHANGELOG.md" "$INSTALL_DIR/"
+
+# Set permissions
+print_info "Setting permissions..."
+chmod 755 "$INSTALL_DIR/dali"
+chmod 644 "$INSTALL_DIR/Dockerfile"
+[ -f "$INSTALL_DIR/README.md" ] && chmod 644 "$INSTALL_DIR/README.md"
+[ -f "$INSTALL_DIR/QUICKSTART.md" ] && chmod 644 "$INSTALL_DIR/QUICKSTART.md"
+[ -f "$INSTALL_DIR/EXAMPLES.md" ] && chmod 644 "$INSTALL_DIR/EXAMPLES.md"
+[ -f "$INSTALL_DIR/CHANGELOG.md" ] && chmod 644 "$INSTALL_DIR/CHANGELOG.md"
+
+# Remove old symlink if exists
+[ -L "/usr/local/bin/dali" ] && rm /usr/local/bin/dali
+[ -f "/usr/local/bin/dali" ] && rm /usr/local/bin/dali
+
 # Create symlink
-sudo ln -s "$DALI_SCRIPT" /usr/local/bin/dali
+print_info "Creating symlink in /usr/local/bin/..."
+ln -s "$INSTALL_DIR/dali" /usr/local/bin/dali
 
 # Verify installation
 if command -v dali &> /dev/null; then
-    print_success "dali installed successfully!"
+    print_success "Dali installed successfully for all users!"
     echo ""
-    print_info "You can now use: dali <command>"
+    print_info "Installation directory: $INSTALL_DIR"
+    print_info "Executable: /usr/local/bin/dali"
+    echo ""
+    print_info "All users can now use: dali <command>"
     print_info "Example: dali init"
     echo ""
-    print_info "Next steps:"
+    print_info "Next steps (as any user):"
     echo "  1. dali init    # Initialize"
     echo "  2. dali build   # Build Kali image (~30 min)"
     echo "  3. dali create  # Create a container"
+    echo ""
+    print_warning "Note: Users need to be in the 'docker' group"
+    print_info "Add user to docker group: sudo usermod -aG docker <username>"
     echo ""
 else
     print_error "Installation failed"
