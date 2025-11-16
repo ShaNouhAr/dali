@@ -73,10 +73,16 @@ dali help
 
 ### Post-Installation
 
-Build the Kali image (only once, ~20-40 min):
+Build the Kali image (only once):
 
+**Option 1: LIGHT build (Recommended)**
 ```bash
-dali build
+dali build light  # Fast (~10 min), essential tools
+```
+
+**Option 2: FULL build**
+```bash
+dali build        # Slow (~30 min), 600+ tools
 ```
 
 > Note: `dali init` is automatically done during installation
@@ -87,6 +93,8 @@ Start using Dali:
 dali create test
 dali shell test
 ```
+
+See `BUILD_OPTIONS.md` for detailed comparison.
 
 ## Local Installation (Alternative)
 
@@ -285,7 +293,9 @@ sudo systemctl enable docker  # Start on boot
 
 After installation:
 
-1. **Build image**: `dali build` (~30 min first time)
+1. **Build image**: 
+   - `dali build light` (recommended, ~10 min)
+   - OR `dali build` (full, ~30 min)
 2. **Create container**: `dali create test`
 3. **Access shell**: `dali shell test`
 4. **Check IP**: `dali checkip test`
@@ -293,5 +303,5 @@ After installation:
 
 > Note: `dali init` is automatically done during system installation
 
-See `README.md` for complete usage guide.
+See `README.md` for complete usage guide and `BUILD_OPTIONS.md` for build comparison.
 

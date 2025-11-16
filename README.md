@@ -117,6 +117,22 @@ rm -rf ~/.dali/
 
 ⚠️ **IMPORTANT**: Run this **once** before creating containers.
 
+**Option A: LIGHT build (Recommended - Fast & Reliable)**
+
+```bash
+dali build light
+```
+
+This will:
+- Download kalilinux/kali-rolling
+- Install essential tools (nmap, metasploit, hydra, john, etc.)
+- Install dirsearch
+- Create the local image **dali-kali:latest**
+- Takes ~5-10 minutes (only once)
+- Size: ~4 GB
+
+**Option B: FULL build (Complete Toolset)**
+
 ```bash
 dali build
 ```
@@ -127,6 +143,9 @@ This will:
 - Install dirsearch
 - Create the local image **dali-kali:latest**
 - Takes ~20-40 minutes (only once)
+- Size: ~9 GB
+
+> **Note**: If FULL build fails, use LIGHT build. See `BUILD_OPTIONS.md` for details.
 
 ### 2. Prepare your WireGuard configurations (optional)
 

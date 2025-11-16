@@ -149,22 +149,34 @@ cmd_init() {
 #############################################
 
 cmd_build() {
-    print_info "Building custom Kali image with kali-linux-large"
-    echo ""
-    print_warning "⚠ This operation can take 20-40 minutes"
-    print_info "It downloads and installs 600+ pentest tools"
-    print_info "Image: kalilinux/kali-rolling + kali-linux-large (~9 GB)"
+    local build_type="${1:-full}"
+    local dockerfile="Dockerfile"
+    
+    if [ "$build_type" = "light" ]; then
+        dockerfile="Dockerfile.light"
+        print_info "Building LIGHT Kali image with essential tools"
+        echo ""
+        print_info "⏱ This will take 5-10 minutes"
+        print_info "Essential tools: nmap, metasploit, hydra, john, hashcat, etc."
+        print_info "Image size: ~3-4 GB"
+    else
+        print_info "Building FULL Kali image with kali-linux-large"
+        echo ""
+        print_warning "⚠ This operation can take 20-40 minutes"
+        print_info "It downloads and installs 600+ pentest tools"
+        print_info "Image: kalilinux/kali-rolling + kali-linux-large (~9 GB)"
+    fi
     echo ""
     
     # Check that Dockerfile exists
-    if [ ! -f "$SCRIPT_DIR/Dockerfile" ]; then
-        print_error "Dockerfile not found in $SCRIPT_DIR"
+    if [ ! -f "$SCRIPT_DIR/$dockerfile" ]; then
+        print_error "$dockerfile not found in $SCRIPT_DIR"
         exit 1
     fi
     
     # Build the image
-    print_info "Starting build..."
-    docker build -t "$KALI_IMAGE" "$SCRIPT_DIR"
+    print_info "Starting build with $dockerfile..."
+    docker build -f "$SCRIPT_DIR/$dockerfile" -t "$KALI_IMAGE" "$SCRIPT_DIR"
     
     if [ $? -eq 0 ]; then
         echo ""
@@ -176,6 +188,7 @@ cmd_build() {
     else
         echo ""
         print_error "Image build failed"
+        print_info "If the full build fails, try: dali build light"
         exit 1
     fi
 }
@@ -688,8 +701,9 @@ show_help() {
 ================================================================
 
 SETUP
-  init       Initialize Dali (optional with system install)
-  build      Build local Kali image with 600+ tools (~30 min, once)
+  init         Initialize Dali (optional with system install)
+  build        Build FULL Kali image (~30 min, 600+ tools, 9 GB)
+  build light  Build LIGHT Kali image (~10 min, essential tools, 4 GB)
 
 CONTAINER MANAGEMENT
   create                               Random name, no VPN
@@ -716,7 +730,10 @@ HELP
 
 QUICK START (after system install)
 
-  1. dali build                  # Build image (once, ~30 min)
+  1. dali build light            # Build LIGHT image (~10 min) - Recommended
+     OR
+     dali build                  # Build FULL image (~30 min)
+  
   2. dali create pentest1        # Create container
   3. dali shell pentest1         # Start hacking!
 
@@ -760,7 +777,7 @@ case "${1:-}" in
         cmd_init
         ;;
     build)
-        cmd_build
+        cmd_build "$2"
         ;;
     create)
         cmd_create "$2" "$3" "$4"
