@@ -54,11 +54,107 @@ if [ ! -f "$SCRIPT_DIR/Dockerfile" ]; then
     exit 1
 fi
 
+# Function to install Docker
+install_docker() {
+    print_info "Installing Docker..."
+    echo ""
+    
+    # Detect OS
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS=$ID
+    else
+        print_error "Cannot detect OS"
+        exit 1
+    fi
+    
+    # Install Docker
+    print_info "Updating package list..."
+    apt-get update -qq
+    
+    print_info "Installing prerequisites..."
+    apt-get install -y -qq ca-certificates curl > /dev/null 2>&1
+    
+    print_info "Adding Docker GPG key..."
+    install -m 0755 -d /etc/apt/keyrings
+    
+    if [ "$OS" = "ubuntu" ]; then
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    elif [ "$OS" = "debian" ]; then
+        curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+    else
+        print_error "Unsupported OS: $OS"
+        print_info "Please install Docker manually: https://docs.docker.com/engine/install/"
+        exit 1
+    fi
+    
+    chmod a+r /etc/apt/keyrings/docker.asc
+    
+    print_info "Adding Docker repository..."
+    if [ "$OS" = "ubuntu" ]; then
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+    elif [ "$OS" = "debian" ]; then
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+    fi
+    
+    print_info "Installing Docker packages..."
+    apt-get update -qq
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin > /dev/null 2>&1
+    
+    if [ $? -eq 0 ]; then
+        print_success "Docker installed successfully!"
+        
+        # Start Docker service
+        print_info "Starting Docker service..."
+        systemctl start docker
+        systemctl enable docker > /dev/null 2>&1
+        
+        print_success "Docker service started"
+        
+        # Add user to docker group
+        if [ -n "$SUDO_USER" ]; then
+            print_info "Adding user $SUDO_USER to docker group..."
+            usermod -aG docker "$SUDO_USER"
+            print_success "User added to docker group"
+            print_warning "User needs to log out and back in for changes to take effect"
+        fi
+    else
+        print_error "Docker installation failed"
+        exit 1
+    fi
+}
+
 # Check if Docker is installed
 if ! command -v docker &> /dev/null; then
     print_warning "Docker is not installed"
-    print_info "Install Docker first: https://docs.docker.com/engine/install/"
-    exit 1
+    echo ""
+    read -p "Do you want to install Docker now? [Y/n] " install_docker_choice
+    
+    if [[ "$install_docker_choice" =~ ^[Nn]$ ]]; then
+        print_info "Please install Docker manually: https://docs.docker.com/engine/install/"
+        exit 1
+    fi
+    
+    echo ""
+    install_docker
+    echo ""
+else
+    print_success "Docker is already installed"
+    
+    # Check if user is in docker group
+    if [ -n "$SUDO_USER" ]; then
+        if ! groups "$SUDO_USER" | grep -q '\bdocker\b'; then
+            echo ""
+            print_warning "User $SUDO_USER is not in the docker group"
+            read -p "Add $SUDO_USER to docker group? [Y/n] " add_user_choice
+            
+            if [[ ! "$add_user_choice" =~ ^[Nn]$ ]]; then
+                usermod -aG docker "$SUDO_USER"
+                print_success "User added to docker group"
+                print_warning "User needs to log out and back in for changes to take effect"
+            fi
+        fi
+    fi
 fi
 
 # Check if already installed

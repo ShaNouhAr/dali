@@ -6,9 +6,29 @@ Install Dali for all users on the system.
 
 ### Prerequisites
 
-- Docker installed and running
 - Root/sudo access
-- Users must be in the `docker` group
+- Internet connection
+- Supported OS: Ubuntu or Debian
+
+> **Note**: Docker will be installed automatically if not present
+
+### What Gets Installed
+
+The installation script will:
+
+1. **Check for Docker**
+   - If not found, ask if you want to install it
+   - Automatically install Docker from official repository
+   - Support for Ubuntu and Debian
+
+2. **Setup Docker**
+   - Add user to docker group
+   - Start and enable Docker service
+
+3. **Install Dali**
+   - Copy files to `/opt/dali/`
+   - Create system-wide command
+   - Setup network and data directory
 
 ### Installation Steps
 
@@ -27,6 +47,8 @@ sudo ./install.sh
 ```
 
 This will:
+- ✅ Install Docker if not present (asks for confirmation)
+- ✅ Add user to docker group automatically
 - ✅ Copy all files to `/opt/dali/`
 - ✅ Create symlink in `/usr/local/bin/dali`
 - ✅ Create Docker network (`dali_network`)
@@ -34,13 +56,14 @@ This will:
 - ✅ Set proper permissions
 - ✅ Make `dali` available to all users
 
-3. **Add users to docker group** (if not already done)
+3. **Log out and back in**
+
+For docker group membership to take effect:
 
 ```bash
-sudo usermod -aG docker <username>
+exit
+# Log back in
 ```
-
-Users need to **log out and log back in** for group changes to take effect.
 
 4. **Verify installation**
 
@@ -170,6 +193,22 @@ docker ps
 
 ## Troubleshooting
 
+### Docker installation fails
+
+**Problem**: Automatic Docker installation failed
+
+**Solution 1**: Install Docker manually
+```bash
+# Follow official guide
+https://docs.docker.com/engine/install/
+```
+
+**Solution 2**: Check OS compatibility
+```bash
+cat /etc/os-release
+# Supported: Ubuntu, Debian
+```
+
 ### "Permission denied" when running docker
 
 **Problem**: User not in docker group
@@ -178,6 +217,12 @@ docker ps
 ```bash
 sudo usermod -aG docker $USER
 # Log out and back in
+```
+
+Or reinstall with:
+```bash
+sudo ./install.sh
+# Accepts adding user to docker group
 ```
 
 ### "dali: command not found"

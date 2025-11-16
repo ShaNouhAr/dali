@@ -33,8 +33,8 @@ Dali builds a local Docker image **dali-kali:latest** (~9 GB) which includes:
 
 ### Prerequisites
 
-- Docker installed and running
 - Root access (for system-wide installation)
+- Docker (can be installed automatically during setup)
 - WireGuard `.conf` configuration files (optional, only for VPN mode)
 
 ### System-wide Installation (recommended)
@@ -49,12 +49,14 @@ sudo ./install.sh
 ```
 
 This will:
+- ✅ Install Docker automatically if not present (Ubuntu/Debian)
 - ✅ Copy Dali to `/opt/dali/`
 - ✅ Create symlink in `/usr/local/bin/dali`
 - ✅ Create Docker network and data directory
+- ✅ Add user to docker group
 - ✅ Make it accessible to all users
 
-After installation, any user can run:
+After installation, log out and back in, then:
 
 ```bash
 dali build        # No need for 'dali init'
@@ -62,12 +64,7 @@ dali create test
 dali shell test
 ```
 
-**Important**: Users need to be in the `docker` group:
-
-```bash
-sudo usermod -aG docker <username>
-# Log out and log back in for changes to take effect
-```
+> **Note**: Log out and back in is required for docker group membership to take effect
 
 ### Local Installation (alternative)
 
