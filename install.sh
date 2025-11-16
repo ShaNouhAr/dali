@@ -105,20 +105,42 @@ chmod 644 "$INSTALL_DIR/Dockerfile"
 print_info "Creating symlink in /usr/local/bin/..."
 ln -s "$INSTALL_DIR/dali" /usr/local/bin/dali
 
+# Create Docker network
+print_info "Creating Docker network..."
+NETWORK_NAME="dali_network"
+if docker network inspect "$NETWORK_NAME" >/dev/null 2>&1; then
+    print_info "Docker network already exists"
+else
+    docker network create "$NETWORK_NAME" >/dev/null 2>&1
+    print_success "Docker network created: $NETWORK_NAME"
+fi
+
+# Create data directory
+DATA_DIR="/opt/dali/data"
+print_info "Creating data directory..."
+if [ ! -d "$DATA_DIR" ]; then
+    mkdir -p "$DATA_DIR"
+    chmod 755 "$DATA_DIR"
+    print_success "Data directory created: $DATA_DIR"
+else
+    print_info "Data directory already exists"
+fi
+
 # Verify installation
 if command -v dali &> /dev/null; then
     print_success "Dali installed successfully for all users!"
     echo ""
     print_info "Installation directory: $INSTALL_DIR"
     print_info "Executable: /usr/local/bin/dali"
+    print_info "Docker network: $NETWORK_NAME"
+    print_info "Data directory: $DATA_DIR"
     echo ""
     print_info "All users can now use: dali <command>"
-    print_info "Example: dali init"
     echo ""
     print_info "Next steps (as any user):"
-    echo "  1. dali init    # Initialize"
-    echo "  2. dali build   # Build Kali image (~30 min)"
-    echo "  3. dali create  # Create a container"
+    echo "  1. dali build   # Build Kali image (~30 min)"
+    echo "  2. dali create  # Create a container"
+    echo "  3. dali shell   # Access container"
     echo ""
     print_warning "Note: Users need to be in the 'docker' group"
     print_info "Add user to docker group: sudo usermod -aG docker <username>"

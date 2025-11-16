@@ -29,6 +29,8 @@ sudo ./install.sh
 This will:
 - ✅ Copy all files to `/opt/dali/`
 - ✅ Create symlink in `/usr/local/bin/dali`
+- ✅ Create Docker network (`dali_network`)
+- ✅ Create data directory (`/opt/dali/data/`)
 - ✅ Set proper permissions
 - ✅ Make `dali` available to all users
 
@@ -48,17 +50,13 @@ dali help
 
 ### Post-Installation
 
-Initialize Dali (run as any user):
-
-```bash
-dali init
-```
-
 Build the Kali image (only once, ~20-40 min):
 
 ```bash
 dali build
 ```
+
+> Note: `dali init` is automatically done during installation
 
 Start using Dali:
 
@@ -242,12 +240,13 @@ sudo systemctl enable docker  # Start on boot
 
 After installation:
 
-1. **Initialize**: `dali init`
-2. **Build image**: `dali build` (~30 min first time)
-3. **Create container**: `dali create test`
-4. **Access shell**: `dali shell test`
-5. **Check IP**: `dali checkip test`
-6. **List containers**: `dali ls`
+1. **Build image**: `dali build` (~30 min first time)
+2. **Create container**: `dali create test`
+3. **Access shell**: `dali shell test`
+4. **Check IP**: `dali checkip test`
+5. **List containers**: `dali ls`
+
+> Note: `dali init` is automatically done during system installation
 
 See `README.md` for complete usage guide.
 

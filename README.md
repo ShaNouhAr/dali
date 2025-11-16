@@ -51,14 +51,15 @@ sudo ./install.sh
 This will:
 - ✅ Copy Dali to `/opt/dali/`
 - ✅ Create symlink in `/usr/local/bin/dali`
+- ✅ Create Docker network and data directory
 - ✅ Make it accessible to all users
 
 After installation, any user can run:
 
 ```bash
-dali init
-dali build
+dali build        # No need for 'dali init'
 dali create test
+dali shell test
 ```
 
 **Important**: Users need to be in the `docker` group:
@@ -113,17 +114,9 @@ rm -rf ~/.dali/
 
 ## 📖 Usage
 
-### 1. Initialize Dali
+### 1. Build the local Kali image
 
-```bash
-dali init
-```
-
-Creates the Docker network and `/opt/dali/data/` directory.
-
-> Note: If using local installation, use `./dali` instead of `dali`
-
-### 2. Build the local Kali image
+> Note: With system installation, `dali init` is automatically done. Only needed for local installation.
 
 ⚠️ **IMPORTANT**: Run this **once** before creating containers.
 
@@ -138,7 +131,7 @@ This will:
 - Create the local image **dali-kali:latest**
 - Takes ~20-40 minutes (only once)
 
-### 3. Prepare your WireGuard configurations (optional)
+### 2. Prepare your WireGuard configurations (optional)
 
 Have your `.conf` files ready for VPN mode. You can place them anywhere, e.g.:
 
@@ -147,7 +140,7 @@ mkdir -p ~/vpn-configs
 cp my-vpn-config.conf ~/vpn-configs/
 ```
 
-### 4. Create a container
+### 3. Create a container
 
 ```bash
 # Without VPN (local testing)
@@ -166,7 +159,7 @@ dali create
 dali create --vpn
 ```
 
-### 5. Access the container shell
+### 4. Access the container shell
 
 ```bash
 dali shell pentest1
@@ -186,19 +179,19 @@ echo "test" > results.txt
 exit
 ```
 
-### 6. Start a container
+### 5. Start a container
 
 ```bash
 dali start pentest1
 ```
 
-### 7. Check the IP
+### 6. Check the IP
 
 ```bash
 dali checkip pentest1
 ```
 
-### 8. List all containers
+### 7. List all containers
 
 ```bash
 dali ls
@@ -206,13 +199,13 @@ dali ls
 dali list
 ```
 
-### 9. Stop a container
+### 8. Stop a container
 
 ```bash
 dali stop pentest1
 ```
 
-### 10. Delete a container
+### 9. Delete a container
 
 ```bash
 # Method 1: Quick deletion (ALL deleted)

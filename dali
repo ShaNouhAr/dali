@@ -680,7 +680,7 @@ show_help() {
 ================================================================
 
 SETUP
-  init       Initialize Dali (create directories)
+  init       Initialize Dali (optional with system install)
   build      Build local Kali image with 600+ tools (~30 min, once)
 
 CONTAINER MANAGEMENT
@@ -706,12 +706,13 @@ HELP
 
 ================================================================
 
-QUICK START
+QUICK START (after system install)
 
-  1. dali init                   # Create directories
-  2. dali build                  # Build image (once, ~30 min)
-  3. dali create pentest1        # Create container
-  4. dali shell pentest1         # Start hacking!
+  1. dali build                  # Build image (once, ~30 min)
+  2. dali create pentest1        # Create container
+  3. dali shell pentest1         # Start hacking!
+
+  Note: 'dali init' only needed for local installation
 
 ================================================================
 
