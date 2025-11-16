@@ -18,7 +18,15 @@ NC='\033[0m' # No Color
 CONFIG_DIR="$HOME/.dali"
 CONFIG_FILE="$CONFIG_DIR/config"
 NETWORK_NAME="dali_network"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Get script directory (resolve symlink for system install)
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+if [ -L "$SCRIPT_PATH" ]; then
+    # If it's a symlink, resolve it
+    SCRIPT_PATH="$(readlink -f "$SCRIPT_PATH")"
+fi
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+
 KALI_IMAGE="dali-kali:latest"
 DATA_DIR="/opt/dali/data"
 
