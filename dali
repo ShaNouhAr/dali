@@ -35,19 +35,19 @@ DATA_DIR="/opt/dali/data"
 #############################################
 
 print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    echo -e "${RED}[ERROR]${NC} $1" >&2
 }
 
 print_success() {
-    echo -e "${GREEN}[OK]${NC} $1"
+    echo -e "${GREEN}[OK]${NC} $1" >&2
 }
 
 print_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    echo -e "${BLUE}[INFO]${NC} $1" >&2
 }
 
 print_warning() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+    echo -e "${YELLOW}[WARN]${NC} $1" >&2
 }
 
 check_docker() {
@@ -108,13 +108,28 @@ prepare_data_dir() {
     local name="$1"
     local container_data_dir="$DATA_DIR/$name"
     
-    # Create data directory for this container
-    if [ ! -d "$container_data_dir" ]; then
-        sudo mkdir -p "$container_data_dir"
-        sudo chmod 755 "$container_data_dir"
-        print_info "Data directory created: $container_data_dir"
+    # Check if parent directory exists
+    if [ ! -d "$DATA_DIR" ]; then
+        print_error "Data directory does not exist: $DATA_DIR"
+        print_info "Run 'sudo mkdir -p $DATA_DIR && sudo chmod 755 $DATA_DIR'"
+        return 1
     fi
     
+    # Create data directory for this container
+    if [ ! -d "$container_data_dir" ]; then
+        # Try without sudo first
+        if mkdir -p "$container_data_dir" 2>/dev/null && chmod 755 "$container_data_dir" 2>/dev/null; then
+            print_info "Data directory created: $container_data_dir"
+        # If fails, try with sudo
+        elif sudo mkdir -p "$container_data_dir" 2>/dev/null && sudo chmod 755 "$container_data_dir" 2>/dev/null; then
+            print_info "Data directory created: $container_data_dir"
+        else
+            print_error "Failed to create data directory: $container_data_dir"
+            return 1
+        fi
+    fi
+    
+    # Return the path on stdout (print_* go to stderr now)
     echo "$container_data_dir"
 }
 
@@ -258,6 +273,10 @@ cmd_create() {
         
         # Prepare data directory
         local host_data_dir=$(prepare_data_dir "$name")
+        if [ -z "$host_data_dir" ]; then
+            print_error "Failed to prepare data directory"
+            exit 1
+        fi
         
         # Create container
         if ! docker run -dit \
@@ -338,6 +357,10 @@ cmd_create() {
     
     # Prepare data directory
     local host_data_dir=$(prepare_data_dir "$name")
+    if [ -z "$host_data_dir" ]; then
+        print_error "Failed to prepare data directory"
+        exit 1
+    fi
     
     # Create container
     if ! docker run -dit \
