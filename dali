@@ -259,17 +259,20 @@ cmd_create() {
         # Prepare data directory
         local host_data_dir=$(prepare_data_dir "$name")
         
-        docker run -d \
+        # Create container
+        if ! docker run -dit \
             --name "${name}" \
             --network "$NETWORK_NAME" \
             -v "$host_data_dir:/data" \
             --cap-add=NET_ADMIN \
             --cap-add=NET_RAW \
             "$KALI_IMAGE" \
-            tail -f /dev/null &> /dev/null
+            /bin/bash > /dev/null; then
+            print_error "Failed to create container"
+            exit 1
+        fi
         
-        print_success "Kali container created"
-        print_success "Container '$name' created successfully!"
+        print_success "✓ Container '$name' created successfully!"
         print_warning "⚠ This container does NOT use VPN"
         print_info "Data: $host_data_dir → /data"
         print_info "Use 'dali shell $name' to access it"
@@ -336,17 +339,20 @@ cmd_create() {
     # Prepare data directory
     local host_data_dir=$(prepare_data_dir "$name")
     
-    docker run -d \
+    # Create container
+    if ! docker run -dit \
         --name "${name}_kali" \
         --network "container:$gluetun_name" \
         -v "$host_data_dir:/data" \
         --cap-add=NET_ADMIN \
         --cap-add=NET_RAW \
         "$KALI_IMAGE" \
-        tail -f /dev/null &> /dev/null
+        /bin/bash > /dev/null; then
+        print_error "Failed to create container"
+        exit 1
+    fi
     
-    print_success "Kali container created"
-    print_success "Container '$name' created successfully!"
+    print_success "✓ Container '$name' created successfully!"
     print_info "VPN config: $(basename "$vpn_conf")"
     print_info "Shared Gluetun container: $gluetun_name"
     print_info "Data: $host_data_dir → /data"
