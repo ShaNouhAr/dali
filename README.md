@@ -1,13 +1,13 @@
 # 🛡️ Dali - Kali Container Manager with VPN
 
-**Dali** is a CLI tool to easily manage isolated Kali Linux containers for pentesting, with **optional** Gluetun VPN integration via WireGuard.
+**Dali** is a CLI tool to easily manage isolated Kali Linux containers for pentesting, with **optional** Gluetun VPN integration via WireGuard or OpenVPN.
 
 ## ✨ Key Features
 
 - ✅ **Complete Kali Linux** - Pre-built local image with 600+ tools
 - ✅ **Optional VPN** - Choose whether to use VPN or not on each container
-- ✅ **WireGuard VPN** automatic connection via Gluetun (when desired)
-- ✅ **Support for multiple WireGuard configurations**
+- ✅ **WireGuard & OpenVPN** - Automatic VPN connection via Gluetun (when desired)
+- ✅ **Support for multiple VPN configurations** - Both .conf and .ovpn files
 - ✅ **Interactive or direct choice** of VPN configuration
 - ✅ **Containers without VPN** for local tests
 - ✅ **Simple management** (start, stop, delete, rm)
@@ -35,7 +35,9 @@ Dali builds a local Docker image **dali-kali:latest** (~9 GB) which includes:
 
 - Root access (for system-wide installation)
 - Docker (can be installed automatically during setup)
-- WireGuard `.conf` configuration files (optional, only for VPN mode)
+- VPN configuration files (optional, only for VPN mode):
+  - WireGuard `.conf` files, OR
+  - OpenVPN `.ovpn` files
 
 ### System-wide Installation (recommended)
 
@@ -147,13 +149,18 @@ This will:
 
 > **Note**: If FULL build fails, use LIGHT build. See `BUILD_OPTIONS.md` for details.
 
-### 2. Prepare your WireGuard configurations (optional)
+### 2. Prepare your VPN configurations (optional)
 
-Have your `.conf` files ready for VPN mode. You can place them anywhere, e.g.:
+Have your VPN config files ready. Dali supports:
+- **WireGuard** (`.conf` files)
+- **OpenVPN** (`.ovpn` files)
+
+You can place them anywhere, e.g.:
 
 ```bash
 mkdir -p ~/vpn-configs
-cp my-vpn-config.conf ~/vpn-configs/
+cp my-wireguard.conf ~/vpn-configs/
+cp my-openvpn.ovpn ~/vpn-configs/
 ```
 
 ### 3. Create a container
@@ -165,8 +172,11 @@ dali create local-test
 # With VPN (interactive choice)
 dali create pentest1 --vpn
 
-# With specific VPN
+# With specific WireGuard VPN
 dali create pentest2 --vpn ~/vpn-configs/us-west.conf
+
+# With specific OpenVPN
+dali create pentest3 --vpn ~/vpn-configs/server.ovpn
 
 # With automatic name (without VPN)
 dali create

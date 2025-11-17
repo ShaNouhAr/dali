@@ -184,6 +184,8 @@ cp "$SCRIPT_DIR/Dockerfile" "$INSTALL_DIR/"
 [ -f "$SCRIPT_DIR/QUICKSTART.md" ] && cp "$SCRIPT_DIR/QUICKSTART.md" "$INSTALL_DIR/"
 [ -f "$SCRIPT_DIR/EXAMPLES.md" ] && cp "$SCRIPT_DIR/EXAMPLES.md" "$INSTALL_DIR/"
 [ -f "$SCRIPT_DIR/CHANGELOG.md" ] && cp "$SCRIPT_DIR/CHANGELOG.md" "$INSTALL_DIR/"
+[ -f "$SCRIPT_DIR/VPN_SETUP.md" ] && cp "$SCRIPT_DIR/VPN_SETUP.md" "$INSTALL_DIR/"
+[ -f "$SCRIPT_DIR/BUILD_OPTIONS.md" ] && cp "$SCRIPT_DIR/BUILD_OPTIONS.md" "$INSTALL_DIR/"
 
 # Set permissions
 print_info "Setting permissions..."
@@ -194,6 +196,8 @@ chmod 644 "$INSTALL_DIR/Dockerfile"
 [ -f "$INSTALL_DIR/QUICKSTART.md" ] && chmod 644 "$INSTALL_DIR/QUICKSTART.md"
 [ -f "$INSTALL_DIR/EXAMPLES.md" ] && chmod 644 "$INSTALL_DIR/EXAMPLES.md"
 [ -f "$INSTALL_DIR/CHANGELOG.md" ] && chmod 644 "$INSTALL_DIR/CHANGELOG.md"
+[ -f "$INSTALL_DIR/VPN_SETUP.md" ] && chmod 644 "$INSTALL_DIR/VPN_SETUP.md"
+[ -f "$INSTALL_DIR/BUILD_OPTIONS.md" ] && chmod 644 "$INSTALL_DIR/BUILD_OPTIONS.md"
 
 # Remove old symlink if exists
 [ -L "/usr/local/bin/dali" ] && rm /usr/local/bin/dali

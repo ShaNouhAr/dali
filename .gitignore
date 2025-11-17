@@ -28,4 +28,9 @@ __pycache__/
 # Temporary files
 *.tmp
 .*.swp
-v1.8
+
+# VPN configurations (sensitive data)
+*.conf
+*.ovpn
+vpn-configs/
+vpn/

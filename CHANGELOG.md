@@ -2,6 +2,48 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.9.0] - 2025-11-17
+
+### 🔐 OpenVPN Support
+
+#### Major additions
+- ✅ **OpenVPN support** - Now accepts `.ovpn` files in addition to `.conf`
+- ✅ **Automatic VPN type detection** - Based on file extension
+- ✅ **Dual VPN protocol support** - WireGuard AND OpenVPN
+- ✅ **Unified interface** - Same commands for both VPN types
+
+#### Technical improvements
+- 🔧 **New function**: `get_vpn_type()` - Detects if config is WireGuard or OpenVPN
+- 🔧 **Updated function**: `check_vpn_file()` - Now validates both `.conf` and `.ovpn`
+- 🔧 **Smart Gluetun creation** - Adapts configuration based on VPN type
+  - WireGuard: mounts to `/gluetun/wireguard/wg0.conf`
+  - OpenVPN: mounts to `/gluetun/custom.conf` with `OPENVPN_CUSTOM_CONFIG`
+
+#### Updated messages
+- 📝 Interactive prompt now mentions both file types
+- 📝 Help updated with examples for both protocols
+- 📝 `list` command shows VPN type in brackets
+
+#### New documentation
+- 📖 **VPN_SETUP.md** - Complete guide for WireGuard and OpenVPN setup
+- 📖 Examples for major VPN providers (Mullvad, ProtonVPN, NordVPN)
+- 📖 Troubleshooting section for VPN issues
+
+#### Usage examples
+```bash
+# WireGuard
+dali create pentest1 --vpn ~/vpn/server.conf
+
+# OpenVPN
+dali create pentest2 --vpn ~/vpn/server.ovpn
+
+# Interactive (both types)
+dali create --vpn
+# Will ask: "Enter path to VPN config (.conf or .ovpn)"
+```
+
+---
+
 ## [1.5.0] - 2025-11-13
 
 ### 🔗 Bind mount system for persistent data

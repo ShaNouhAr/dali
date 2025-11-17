@@ -74,13 +74,25 @@ check_vpn_file() {
     
     if [ ! -f "$vpn_file" ]; then
         print_error "VPN configuration file not found: $vpn_file"
-        print_info "Provide a valid path to a .conf file"
+        print_info "Provide a valid path to a .conf or .ovpn file"
         exit 1
     fi
     
-    if [[ ! "$vpn_file" =~ \.conf$ ]]; then
-        print_error "File must be a .conf file"
+    if [[ ! "$vpn_file" =~ \.(conf|ovpn)$ ]]; then
+        print_error "File must be a .conf (WireGuard) or .ovpn (OpenVPN) file"
         exit 1
+    fi
+}
+
+get_vpn_type() {
+    local vpn_file="$1"
+    
+    if [[ "$vpn_file" =~ \.conf$ ]]; then
+        echo "wireguard"
+    elif [[ "$vpn_file" =~ \.ovpn$ ]]; then
+        echo "openvpn"
+    else
+        echo "unknown"
     fi
 }
 
@@ -300,10 +312,10 @@ cmd_create() {
     
     # MODE WITH VPN
     
-    # If no .conf file specified, ask for path
+    # If no VPN config file specified, ask for path
     if [ -z "$vpn_conf" ]; then
         echo ""
-        read -p "Enter path to WireGuard .conf file: " vpn_conf
+        read -p "Enter path to VPN config (.conf for WireGuard or .ovpn for OpenVPN): " vpn_conf
         
         if [ -z "$vpn_conf" ]; then
             print_error "No configuration file specified"
@@ -314,10 +326,12 @@ cmd_create() {
     # Check if file exists and is valid
     check_vpn_file "$vpn_conf"
     
-    print_info "Using: $(basename "$vpn_conf")"
+    # Detect VPN type
+    local vpn_type=$(get_vpn_type "$vpn_conf")
+    print_info "Using: $(basename "$vpn_conf") [$vpn_type]"
     
-    # Generate Gluetun container name based on config file
-    local conf_name=$(basename "$vpn_conf" .conf)
+    # Generate Gluetun container name based on config file (remove extension)
+    local conf_name=$(basename "$vpn_conf" | sed 's/\.\(conf\|ovpn\)$//')
     local gluetun_name="gluetun_${conf_name}"
     
     # Check if Gluetun container already exists for this config
@@ -333,17 +347,36 @@ cmd_create() {
     else
         print_info "Creating Gluetun container: $gluetun_name"
         
-        # Create Gluetun container with WireGuard
-        docker run -d \
-            --name "$gluetun_name" \
-            --cap-add NET_ADMIN \
-            --network "$NETWORK_NAME" \
-            -e VPN_SERVICE_PROVIDER=custom \
-            -e VPN_TYPE=wireguard \
-            -v "$vpn_conf:/gluetun/wireguard/wg0.conf:ro" \
-            -e HTTPPROXY=off \
-            -e SHADOWSOCKS=off \
-            qmcgaw/gluetun &> /dev/null
+        # Create Gluetun container with appropriate VPN type
+        if [ "$vpn_type" = "wireguard" ]; then
+            # WireGuard configuration
+            docker run -d \
+                --name "$gluetun_name" \
+                --cap-add NET_ADMIN \
+                --network "$NETWORK_NAME" \
+                -e VPN_SERVICE_PROVIDER=custom \
+                -e VPN_TYPE=wireguard \
+                -v "$vpn_conf:/gluetun/wireguard/wg0.conf:ro" \
+                -e HTTPPROXY=off \
+                -e SHADOWSOCKS=off \
+                qmcgaw/gluetun &> /dev/null
+        elif [ "$vpn_type" = "openvpn" ]; then
+            # OpenVPN configuration
+            docker run -d \
+                --name "$gluetun_name" \
+                --cap-add NET_ADMIN \
+                --network "$NETWORK_NAME" \
+                -e VPN_SERVICE_PROVIDER=custom \
+                -e VPN_TYPE=openvpn \
+                -v "$vpn_conf:/gluetun/custom.conf:ro" \
+                -e OPENVPN_CUSTOM_CONFIG=/gluetun/custom.conf \
+                -e HTTPPROXY=off \
+                -e SHADOWSOCKS=off \
+                qmcgaw/gluetun &> /dev/null
+        else
+            print_error "Unsupported VPN type: $vpn_type"
+            exit 1
+        fi
         
         print_success "Gluetun container created"
         
@@ -735,11 +768,12 @@ SETUP
   build light  Build LIGHT Kali image (~10 min, essential tools, 4 GB)
 
 CONTAINER MANAGEMENT
-  create                               Random name, no VPN
-  create <name>                        Named container, no VPN
-  create --vpn                         Random name, with VPN (asks for path)
-  create <name> --vpn                  Named container, with VPN (asks for path)
-  create <name> --vpn /path/file.conf  Named container, specific VPN config
+  create                                  Random name, no VPN
+  create <name>                           Named container, no VPN
+  create --vpn                            Random name, with VPN (asks for path)
+  create <name> --vpn                     Named container, with VPN (asks for path)
+  create <name> --vpn /path/file.conf     WireGuard VPN config
+  create <name> --vpn /path/file.ovpn     OpenVPN config
 
   start <name>                   Start a container
   stop <name>                    Stop a container
@@ -774,7 +808,8 @@ EXAMPLES
 
   dali create                              Create with random name (e.g., stealth-fox-123)
   dali create test1                        Create 'test1' without VPN
-  dali create hack --vpn ~/vpn/us.conf     Create 'hack' with specific VPN
+  dali create hack --vpn ~/vpn/us.conf     Create 'hack' with WireGuard VPN
+  dali create pentest --vpn ~/vpn/us.ovpn  Create 'pentest' with OpenVPN
   dali create --vpn                        Create with VPN (will ask for path)
   dali ls                                  List all containers
   dali checkip hack                        Verify VPN is working
@@ -787,8 +822,9 @@ NOTES
   [VPN]      = Container with VPN active
   [NO VPN]   = Container without VPN (direct connection)
   
+  VPN Support:   WireGuard (.conf) and OpenVPN (.ovpn)
   Data location: /opt/dali/data/<name> -> /data (in container)
-  Local image:   dali-kali:latest (~9 GB)
+  Local image:   dali-kali:latest (~9 GB or ~4 GB for light)
 
 ================================================================
 
