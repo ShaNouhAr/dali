@@ -96,6 +96,42 @@ get_vpn_type() {
     fi
 }
 
+resolve_ovpn_hostnames() {
+    local input_file="$1"
+    local output_file="$2"
+    
+    # Copy the original file
+    cp "$input_file" "$output_file"
+    
+    # Find all remote lines with hostnames and resolve them
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^remote[[:space:]]+([^[:space:]]+)[[:space:]]+([0-9]+) ]]; then
+            local host="${BASH_REMATCH[1]}"
+            local port="${BASH_REMATCH[2]}"
+            
+            # Check if it's already an IP address
+            if [[ ! "$host" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                # It's a hostname, resolve it
+                print_info "Résolution DNS: $host..."
+                local ip=$(getent hosts "$host" | awk '{ print $1 ; exit }')
+                
+                if [ -z "$ip" ]; then
+                    # Try with dig as fallback
+                    ip=$(dig +short "$host" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
+                fi
+                
+                if [ -n "$ip" ]; then
+                    print_info "  → $host résolu en $ip"
+                    # Replace hostname with IP in the output file
+                    sed -i "s/^remote[[:space:]]\+${host}[[:space:]]\+${port}/remote ${ip} ${port}/" "$output_file"
+                else
+                    print_warning "  → Impossible de résoudre $host, conservation du hostname"
+                fi
+            fi
+        fi
+    done < "$input_file"
+}
+
 check_kali_image() {
     if ! docker images | grep -q "^dali-kali\|^kalitool-kali"; then
         print_warning "Local Kali image not found!"
@@ -361,14 +397,17 @@ cmd_create() {
                 -e SHADOWSOCKS=off \
                 qmcgaw/gluetun &> /dev/null
         elif [ "$vpn_type" = "openvpn" ]; then
-            # OpenVPN configuration
+            # OpenVPN configuration - resolve hostnames first
+            local resolved_ovpn="/tmp/gluetun_${conf_name}_resolved.ovpn"
+            resolve_ovpn_hostnames "$vpn_conf" "$resolved_ovpn"
+            
             docker run -d \
                 --name "$gluetun_name" \
                 --cap-add NET_ADMIN \
                 --network "$NETWORK_NAME" \
                 -e VPN_SERVICE_PROVIDER=custom \
                 -e VPN_TYPE=openvpn \
-                -v "$vpn_conf:/gluetun/custom.conf:ro" \
+                -v "$resolved_ovpn:/gluetun/custom.conf:ro" \
                 -e OPENVPN_CUSTOM_CONFIG=/gluetun/custom.conf \
                 -e DNS_KEEP_NAMESERVER=on \
                 -e HTTPPROXY=off \
@@ -517,6 +556,10 @@ cmd_delete() {
                 print_info "No other container is using $gluetun_name, removing..."
                 docker stop "$gluetun_name" &> /dev/null 2>&1 || true
                 docker rm "$gluetun_name" &> /dev/null 2>&1 || true
+                
+                # Clean up temporary resolved OVPN file
+                local conf_name=$(echo "$gluetun_name" | sed 's/^gluetun_//')
+                rm -f "/tmp/gluetun_${conf_name}_resolved.ovpn" 2>/dev/null || true
             else
                 print_info "$gluetun_name is still used by $usage container(s), keeping it"
             fi
@@ -579,6 +622,10 @@ cmd_rm() {
                 print_info "No other container is using $gluetun_name, removing..."
                 docker stop "$gluetun_name" &> /dev/null 2>&1 || true
                 docker rm "$gluetun_name" &> /dev/null 2>&1 || true
+                
+                # Clean up temporary resolved OVPN file
+                local conf_name=$(echo "$gluetun_name" | sed 's/^gluetun_//')
+                rm -f "/tmp/gluetun_${conf_name}_resolved.ovpn" 2>/dev/null || true
             else
                 print_info "$gluetun_name is still used by $usage container(s), keeping it"
             fi
