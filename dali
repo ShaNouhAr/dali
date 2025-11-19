@@ -553,13 +553,20 @@ cmd_delete() {
         if [ -n "$gluetun_name" ]; then
             local usage=$(check_gluetun_usage "$gluetun_name")
             if [ "$usage" -eq 0 ]; then
-                print_info "No other container is using $gluetun_name, removing..."
-                docker stop "$gluetun_name" &> /dev/null 2>&1 || true
-                docker rm "$gluetun_name" &> /dev/null 2>&1 || true
-                
-                # Clean up temporary resolved OVPN file
-                local conf_name=$(echo "$gluetun_name" | sed 's/^gluetun_//')
-                rm -f "/tmp/gluetun_${conf_name}_resolved.ovpn" 2>/dev/null || true
+                echo ""
+                read -p "Le conteneur Gluetun '$gluetun_name' n'est plus utilisé. Le supprimer aussi ? [y/N] " confirm_gluetun
+                if [[ "$confirm_gluetun" =~ ^[Yy]$ ]]; then
+                    print_info "Suppression de $gluetun_name..."
+                    docker stop "$gluetun_name" &> /dev/null 2>&1 || true
+                    docker rm "$gluetun_name" &> /dev/null 2>&1 || true
+                    
+                    # Clean up temporary resolved OVPN file
+                    local conf_name=$(echo "$gluetun_name" | sed 's/^gluetun_//')
+                    rm -f "/tmp/gluetun_${conf_name}_resolved.ovpn" 2>/dev/null || true
+                    print_success "Gluetun supprimé"
+                else
+                    print_info "Gluetun conservé (vous pouvez le réutiliser)"
+                fi
             else
                 print_info "$gluetun_name is still used by $usage container(s), keeping it"
             fi
@@ -619,13 +626,20 @@ cmd_rm() {
         if [ -n "$gluetun_name" ]; then
             local usage=$(check_gluetun_usage "$gluetun_name")
             if [ "$usage" -eq 0 ]; then
-                print_info "No other container is using $gluetun_name, removing..."
-                docker stop "$gluetun_name" &> /dev/null 2>&1 || true
-                docker rm "$gluetun_name" &> /dev/null 2>&1 || true
-                
-                # Clean up temporary resolved OVPN file
-                local conf_name=$(echo "$gluetun_name" | sed 's/^gluetun_//')
-                rm -f "/tmp/gluetun_${conf_name}_resolved.ovpn" 2>/dev/null || true
+                echo ""
+                read -p "Le conteneur Gluetun '$gluetun_name' n'est plus utilisé. Le supprimer aussi ? [y/N] " confirm_gluetun
+                if [[ "$confirm_gluetun" =~ ^[Yy]$ ]]; then
+                    print_info "Suppression de $gluetun_name..."
+                    docker stop "$gluetun_name" &> /dev/null 2>&1 || true
+                    docker rm "$gluetun_name" &> /dev/null 2>&1 || true
+                    
+                    # Clean up temporary resolved OVPN file
+                    local conf_name=$(echo "$gluetun_name" | sed 's/^gluetun_//')
+                    rm -f "/tmp/gluetun_${conf_name}_resolved.ovpn" 2>/dev/null || true
+                    print_success "Gluetun supprimé"
+                else
+                    print_info "Gluetun conservé (vous pouvez le réutiliser)"
+                fi
             else
                 print_info "$gluetun_name is still used by $usage container(s), keeping it"
             fi
