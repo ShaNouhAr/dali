@@ -370,6 +370,7 @@ cmd_create() {
                 -e VPN_TYPE=openvpn \
                 -v "$vpn_conf:/gluetun/custom.conf:ro" \
                 -e OPENVPN_CUSTOM_CONFIG=/gluetun/custom.conf \
+                -e DNS_KEEP_NAMESERVER=on \
                 -e HTTPPROXY=off \
                 -e SHADOWSOCKS=off \
                 qmcgaw/gluetun &> /dev/null
