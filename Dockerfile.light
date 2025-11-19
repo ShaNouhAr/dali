@@ -17,6 +17,13 @@ RUN apt update && \
     python3-pip \
     curl \
     wget \
+    iputils-ping \
+    traceroute \
+    dnsutils \
+    net-tools \
+    iproute2 \
+    telnet \
+    bind9-dnsutils \
     nmap \
     masscan \
     netcat-traditional \

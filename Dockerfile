@@ -15,10 +15,20 @@ RUN apt update && \
     apt -y install --fix-missing kali-linux-large || \
     (apt -y --fix-broken install && apt -y install --fix-missing kali-linux-large)
 
-# Install additional tools
+# Install additional tools and network utilities
 RUN apt update && \
-    apt -y install git python3 python3-pip && \
-    apt clean && \
+    apt -y install \
+    git \
+    python3 \
+    python3-pip \
+    iputils-ping \
+    traceroute \
+    dnsutils \
+    net-tools \
+    iproute2 \
+    telnet \
+    bind9-dnsutils \
+    && apt clean && \
     rm -rf /var/lib/apt/lists/*
 
 # Install dirsearch
